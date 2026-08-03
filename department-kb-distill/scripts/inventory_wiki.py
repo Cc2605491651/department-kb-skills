@@ -27,16 +27,44 @@ HEADERS = [
 
 
 def run_dws(args: list[str]) -> dict:
-    result = subprocess.run(["dws", *args, "--format", "json"], capture_output=True, text=True, timeout=180)
-    if result.returncode != 0:
-        raise RuntimeError(f"DWS 只读命令失败：{' '.join(args[:4])}")
-    start, end = result.stdout.find("{"), result.stdout.rfind("}")
-    if start < 0 or end < start:
-        raise RuntimeError("DWS 未返回 JSON")
-    payload = json.loads(result.stdout[start:end + 1])
-    if payload.get("success") is False or payload.get("error"):
-        raise RuntimeError(f"DWS 返回业务错误：{json.dumps(payload.get('error') or {}, ensure_ascii=False)[:500]}")
-    return payload
+    """执行只读 DWS 命令。
+
+    大型知识库需要连续请求很多文件夹，偶发的网络或服务端失败不应让整次
+    盘点立即中止。首次失败时按 DWS 规则带 --verbose 重试一次；如仍失败，
+    保留具体命令和简短错误，便于定位到对应文件夹。
+    """
+    command = ["dws", *args, "--format", "json"]
+    errors: list[str] = []
+    for attempt in range(2):
+        attempt_command = command if attempt == 0 or "--verbose" in command else [*command, "--verbose"]
+        try:
+            result = subprocess.run(attempt_command, capture_output=True, text=True, timeout=180)
+        except subprocess.TimeoutExpired:
+            errors.append("命令超时180秒")
+            continue
+
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or f"退出码 {result.returncode}").strip()
+            errors.append(detail[-800:])
+            continue
+
+        start, end = result.stdout.find("{"), result.stdout.rfind("}")
+        if start < 0 or end < start:
+            errors.append("DWS 未返回 JSON")
+            continue
+        try:
+            payload = json.loads(result.stdout[start:end + 1])
+        except json.JSONDecodeError as exc:
+            errors.append(f"DWS JSON 解析失败：{exc}")
+            continue
+        if payload.get("success") is False or payload.get("error"):
+            detail = json.dumps(payload.get("error") or payload, ensure_ascii=False)[:800]
+            errors.append(f"DWS 返回业务错误：{detail}")
+            continue
+        return payload
+
+    detail = errors[-1] if errors else "未知错误"
+    raise RuntimeError(f"DWS 只读命令失败（已重试 1 次）：{' '.join(args)}；{detail}")
 
 
 def stable_id(workspace: str, node_id: str, prefix: str) -> str:
