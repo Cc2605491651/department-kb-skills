@@ -1,0 +1,13 @@
+{
+  "contract": "department-kb-distill-maintenance",
+  "version": 1,
+  "capabilities": {
+    "independent_inventory_output": true,
+    "selected_source_extraction": true,
+    "selected_source_semantic": true,
+    "content_hash_cache": true,
+    "relation_verification_cache": true,
+    "publication_hash_skip": true,
+    "readback_last_scope": true
+  }
+}

@@ -1,0 +1,17 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+*.tmp
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# 本地宣讲材料不属于Skill源码仓库
+/*.md
+!/README.md

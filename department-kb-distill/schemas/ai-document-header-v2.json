@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "部门知识库统一AI检索元数据",
+  "type": "object",
+  "required": ["schema_version", "stable_id", "view", "metadata", "distillation_profile"],
+  "properties": {
+    "schema_version": {"const": "kb-ai-document-v2"},
+    "stable_id": {"type": "string", "minLength": 1},
+    "view": {"type": "string", "enum": ["原目录视图", "业务分类视图"]},
+    "metadata": {
+      "type": "object",
+      "required": [
+        "title", "page_type", "scenario", "keywords", "summary", "owner", "status",
+        "processing", "version", "source", "source_updated_at", "content_hash", "sources",
+        "blindspots", "relations", "property_generated_at", "property_updated_at"
+      ],
+      "properties": {
+        "title": {"type": "string", "minLength": 1},
+        "page_type": {"type": "string", "enum": ["制度", "流程", "指标", "常见问题", "案例", "概念", "总览"]},
+        "scenario": {"type": "array", "items": {"type": "string"}},
+        "keywords": {"type": "array", "items": {"type": "string"}},
+        "summary": {"type": "string"},
+        "owner": {"type": "string"},
+        "status": {"type": "string", "enum": ["候选", "正式", "已失效", "待确认"]},
+        "processing": {"type": "string", "enum": ["已蒸馏", "平台字符限制-原附件保全"]},
+        "version": {"type": "string"},
+        "source": {"type": "string"},
+        "source_updated_at": {"type": "string"},
+        "content_hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "sources": {"type": "array", "items": {"type": "string"}},
+        "blindspots": {"type": "array", "items": {"type": "string"}},
+        "relations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["relation_type", "relation_meaning", "related_object"],
+            "properties": {
+              "relation_type": {"type": "string"},
+              "relation_meaning": {"type": "string"},
+              "related_object": {"type": "string"}
+            },
+            "additionalProperties": false
+          }
+        },
+        "property_generated_at": {"type": "string"},
+        "property_updated_at": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "distillation_profile": {
+      "type": "object",
+      "required": ["core_theme", "business_objects", "document_role", "inputs", "actions", "outputs", "constraints"],
+      "properties": {
+        "core_theme": {"type": "string"},
+        "business_objects": {"type": "array", "items": {"type": "string"}},
+        "document_role": {"type": "string"},
+        "inputs": {"type": "array", "items": {"type": "string"}},
+        "actions": {"type": "array", "items": {"type": "string"}},
+        "outputs": {"type": "array", "items": {"type": "string"}},
+        "constraints": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "health-report.schema.json",
+  "title": "Department knowledge-base health report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "generated_at", "run_id", "findings", "counts"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "generated_at": {"type": "string", "minLength": 1},
+    "run_id": {"type": "string"},
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "finding_type", "source_id", "title", "source_url", "related_source_id", "related_title", "related_url", "detail", "recommended_action", "new_issue"],
+        "properties": {
+          "severity": {"enum": ["P0", "P1", "P2"]},
+          "finding_type": {"type": "string", "minLength": 1},
+          "source_id": {"type": "string"},
+          "title": {"type": "string"},
+          "source_url": {"type": "string"},
+          "related_source_id": {"type": "string"},
+          "related_title": {"type": "string"},
+          "related_url": {"type": "string"},
+          "detail": {"type": "string", "minLength": 1},
+          "recommended_action": {"type": "string", "minLength": 1},
+          "new_issue": {"type": "boolean"}
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "by_severity", "by_type", "new_conflicts"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "by_severity": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+        "by_type": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}},
+        "new_conflicts": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

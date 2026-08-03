@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["task_id", "source", "raw_admission", "execution", "content", "semantic_processing", "relation_processing", "execution_identity", "publishing", "acceptance"],
+  "properties": {
+    "task_id": {"type": "string", "minLength": 1},
+    "source": {
+      "type": "object",
+      "required": ["workspace_id", "workspace_url", "department", "stable_id_prefix", "include_paths"],
+      "properties": {
+        "workspace_id": {"type": "string", "minLength": 1},
+        "workspace_url": {"type": "string", "minLength": 1},
+        "department": {"type": "string", "minLength": 1},
+        "stable_id_prefix": {"type": "string", "pattern": "^[A-Za-z0-9_-]+$"},
+        "include_paths": {"type": "array", "items": {"type": "string"}},
+        "exclude_paths": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "publishing": {
+      "type": "object",
+      "required": ["enabled", "target_folder_url", "publish_root_name", "allow_delete", "allow_move", "allow_permission_change", "allow_overwrite_existing"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "target_folder_url": {"type": "string"},
+        "publish_root_name": {"type": "string"},
+        "allow_delete": {"const": false},
+        "allow_move": {"const": false},
+        "allow_permission_change": {"const": false},
+        "allow_overwrite_existing": {"const": false}
+      }
+    }
+  }
+}

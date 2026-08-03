@@ -1,0 +1,4 @@
+interface:
+  display_name: "部门知识库全量蒸馏"
+  short_description: "首次建设或全量重建部门知识库并完成审核、发布与回读"
+  default_prompt: "使用 $department-kb-distill 对新的部门知识库执行首次全量蒸馏，生成双目录知识页、检索入口、结果矩阵并按任务配置发布回读。"

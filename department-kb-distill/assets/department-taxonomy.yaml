@@ -1,0 +1,42 @@
+department: "<DEPARTMENT_NAME>"
+version: "v1.0"
+updated_at: "<YYYY-MM-DD>"
+
+categories:
+  - code: "10"
+    name: "<CATEGORY_NAME_1>"
+    definition: "<WHAT_CONTENT_BELONGS_HERE>"
+    include_keywords: []
+    exclude_keywords: []
+    examples: []
+
+  - code: "20"
+    name: "<CATEGORY_NAME_2>"
+    definition: "<WHAT_CONTENT_BELONGS_HERE>"
+    include_keywords: []
+    exclude_keywords: []
+    examples: []
+
+  - code: "90"
+    name: "待确认分类"
+    definition: "无法依据正文和既定规则稳定归类的文档"
+    include_keywords: []
+    exclude_keywords: []
+    examples: []
+
+routing:
+  allow_multiple_candidates: true
+  require_one_primary_category: true
+  unresolved_category_code: "90"
+  evidence_priority:
+    - "正文明确业务对象"
+    - "文档用途和适用场景"
+    - "标题和关键词"
+    - "原目录路径"
+  path_context_cannot_decide_alone: true
+
+quality_rules:
+  category_name_must_be_plain_language: true
+  category_definition_required: true
+  overlapping_categories_require_boundary_note: true
+  taxonomy_change_requires_version_update: true

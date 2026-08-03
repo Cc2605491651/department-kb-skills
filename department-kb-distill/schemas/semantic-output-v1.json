@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "document_key": {"type": "string"},
+          "summary": {"type": "string"},
+          "page_type_candidate": {"type": "string"},
+          "scenarios": {"type": "array", "items": {"type": "string"}},
+          "keywords": {"type": "array", "items": {"type": "string"}},
+          "core_theme": {"type": "string"},
+          "business_objects": {"type": "array", "items": {"type": "string"}},
+          "document_role": {"type": "string"},
+          "entities": {"type": "array", "items": {"type": "string"}},
+          "inputs": {"type": "array", "items": {"type": "string"}},
+          "actions": {"type": "array", "items": {"type": "string"}},
+          "outputs": {"type": "array", "items": {"type": "string"}},
+          "explicit_references": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {"target_text": {"type": "string"}, "evidence": {"type": "string"}},
+              "required": ["target_text", "evidence"],
+              "additionalProperties": false
+            }
+          },
+          "version_signals": {"type": "array", "items": {"type": "string"}},
+          "time_signals": {"type": "array", "items": {"type": "string"}},
+          "constraints": {"type": "array", "items": {"type": "string"}},
+          "relation_clues": {"type": "array", "items": {"type": "string"}},
+          "evidence_locations": {"type": "array", "items": {"type": "string"}},
+          "warnings": {"type": "array", "items": {"type": "string"}}
+        },
+        "required": ["document_key", "summary", "page_type_candidate", "scenarios", "keywords", "core_theme", "business_objects", "document_role", "entities", "inputs", "actions", "outputs", "explicit_references", "version_signals", "time_signals", "constraints", "relation_clues", "evidence_locations", "warnings"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["items"],
+  "additionalProperties": false
+}

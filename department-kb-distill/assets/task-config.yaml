@@ -1,0 +1,117 @@
+task_id: "<TASK_ID>"
+spec_version: "v1.0"
+
+source:
+  workspace_name: "<SOURCE_WORKSPACE_NAME>"
+  workspace_id: "<SOURCE_WORKSPACE_ID>"
+  workspace_url: "<SOURCE_WORKSPACE_URL>"
+  department: "<DEPARTMENT_NAME>"
+  stable_id_prefix: "<DEPARTMENT_PREFIX>"
+  snapshot_at: "<YYYY-MM-DD HH:mm:ss +0800>"
+  include_paths:
+    - "<INCLUDE_PATH>"
+  exclude_paths: []
+  include_history: false
+  include_recycle_bin: false
+
+raw_admission:
+  standard_version: "v2.0"
+  allowed_extensions:
+    - "adoc"
+    - "docx"
+    - "pdf"
+    - "pptx"
+    - "xlsx"
+    - "axls"
+    - "csv"
+    - "md"
+    - "txt"
+  reject_standalone_images: true
+  reject_audio: true
+  reject_video: true
+  reject_archives: true
+  reject_scanned_pdf_without_text: true
+  reject_image_only_presentation: true
+
+execution:
+  local_workbench: "<ABSOLUTE_LOCAL_WORKBENCH_PATH>"
+  delivery_directory: "<ABSOLUTE_DELIVERY_PATH>"
+  local_only: true
+  remote_write_policy: "forbidden"
+  remote_publish_policy: "forbidden"
+  max_download_attempts: 2
+  silent_omission_allowed: false
+
+content:
+  save_raw_mirror: true
+  save_original_attachments: true
+  generate_original_directory_view: true
+  generate_business_directory_view: true
+  require_full_page_in_both_views: true
+  required_metadata_fields: 17
+
+semantic_processing:
+  executor: "Codex"
+  generate_summary: true
+  generate_keywords: true
+  generate_scenarios: true
+  generate_features: true
+  mark_uncertain_as_pending_review: true
+
+relation_processing:
+  local_rules:
+    - R01
+    - R02
+    - R03
+    - R04
+    - R05
+    - R06
+    - R07
+    - R08
+    - R09
+    - R10
+  codex_bilateral_verification: true
+  l2_auto_approve: true
+  l2_sample_rate: 0.20
+  l3_requires_business_confirmation: true
+
+department_rules:
+  taxonomy_file: "department-taxonomy.yaml"
+  sensitive_scope_file: "sensitive-scope.yaml"
+
+execution_identity:
+  executed_by: "<AI_TASK_INITIATOR>"
+  execution_agent: "Codex"
+  owner_source: "dingtalk_creator"
+  l3_business_confirmation_required: true
+
+publishing:
+  enabled: false
+  target_folder_url: "<TARGET_FOLDER_URL_IF_AUTHORIZED>"
+  publish_root_name: "<NEW_ROOT_FOLDER_NAME>"
+  authorization_source: "task_start_target_folder_url"
+  allowed_source_views:
+    - "01-原文镜像（按原目录）"
+    - "02-蒸馏结果（按文档类型）"
+  workers: 30
+  max_batch_size: 30
+  markdown_chunk_characters: 9000
+  max_attempts_per_operation: 3
+  smoke_test_groups: 2
+  require_target_url_at_task_start: true
+  require_readback_verification: true
+  require_remote_tree_audit: true
+  allow_delete: false
+  allow_move: false
+  allow_permission_change: false
+  allow_overwrite_existing: false
+
+review_sync:
+  enabled: false
+  note: "发布目录链接不包含AI表格写入授权；如需同步审核清单必须单独开启"
+
+acceptance:
+  pending_count_must_equal: 0
+  silent_omission_count_must_equal: 0
+  successful_pages_missing_17_fields_must_equal: 0
+  successful_pages_missing_original_content_must_equal: 0

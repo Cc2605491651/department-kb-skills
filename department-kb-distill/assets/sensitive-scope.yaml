@@ -1,0 +1,61 @@
+department: "<DEPARTMENT_NAME>"
+version: "v1.0"
+
+default_policy: "allow_with_source_permissions"
+
+excluded_paths:
+  - path: "<PATH_NOT_ALLOWED_TO_PROCESS>"
+    reason: "<REASON>"
+
+metadata_only_paths:
+  - path: "<PATH_ALLOWED_FOR_METADATA_ONLY>"
+    allowed_fields:
+      - "标题"
+      - "类型"
+      - "Owner"
+      - "来源链接"
+    reason: "<REASON>"
+
+sensitive_categories:
+  - name: "个人敏感信息"
+    examples:
+      - "身份证件信息"
+      - "个人联系方式"
+      - "银行账户"
+    content_policy: "inherit_source_permissions"
+    relation_policy: "do_not_expose_to_lower_permission_users"
+
+  - name: "人事与薪酬"
+    examples:
+      - "绩效结果"
+      - "薪酬数据"
+      - "员工处分"
+    content_policy: "inherit_source_permissions"
+    relation_policy: "permission_review_required"
+
+  - name: "客户与商业机密"
+    examples:
+      - "客户名单"
+      - "合同价格"
+      - "未公开经营数据"
+    content_policy: "inherit_source_permissions"
+    relation_policy: "permission_review_required"
+
+local_storage:
+  allowed_users: "<AUTHORIZED_USERS_OR_GROUP>"
+  retention_days: "<NUMBER_OF_DAYS>"
+  credentials_must_not_be_stored: true
+  temporary_files_must_be_cleaned: true
+
+relationship_acl:
+  inherit_stricter_side: true
+  hide_restricted_title: true
+  hide_restricted_summary: true
+  hide_restricted_keywords: true
+  hide_restricted_relation_existence: true
+
+publishing:
+  requires_permission_owner_approval: true
+  local_logs_must_not_be_published: true
+  caches_must_not_be_published: true
+  credentials_must_not_be_published: true

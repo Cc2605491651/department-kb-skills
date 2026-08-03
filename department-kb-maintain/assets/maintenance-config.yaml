@@ -1,0 +1,14 @@
+maintenance:
+  enabled: true
+  contract_version: 1
+  missing_confirm_runs: 2
+  stale_review_days: 180
+  permission_scan: "off"
+  hash_audit: "off"
+  separate_incremental_job_required: true
+  publish_requires_explicit_stage: true
+  require_explicit_confirmation: true
+  require_current_run_acceptance: true
+  require_local_acceptance: true
+  require_remote_readback_when_published: true
+  keep_observation_snapshots: true

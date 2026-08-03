@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "relation_id": {"type": "string"},
+          "verification_status": {"type": "string", "enum": ["confirmed", "rejected", "needs_review"]},
+          "relation_type": {"type": "string"},
+          "direction": {"type": "string"},
+          "relation_meaning": {"type": "string"},
+          "source_evidence": {"type": "array", "items": {"type": "string"}},
+          "target_evidence": {"type": "array", "items": {"type": "string"}},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "review_level": {"type": "string", "enum": ["L1", "L2", "L3"]},
+          "risk_flags": {"type": "array", "items": {"type": "string"}},
+          "reason": {"type": "string"}
+        },
+        "required": ["relation_id", "verification_status", "relation_type", "direction", "relation_meaning", "source_evidence", "target_evidence", "confidence", "review_level", "risk_flags", "reason"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["items"],
+  "additionalProperties": false
+}

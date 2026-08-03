@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "incremental-plan.schema.json",
+  "title": "Department knowledge-base incremental change plan",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "run_id", "generated_at", "snapshot_id", "changes", "counts", "actions", "status"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "generated_at": {"type": "string", "minLength": 1},
+    "snapshot_id": {"type": "string", "minLength": 1},
+    "phase": {"enum": ["post_extraction"]},
+    "status": {"enum": ["changes_detected", "no_change"]},
+    "changes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "required": ["source_id", "change_type", "change_flags"],
+        "properties": {
+          "source_id": {"type": "string", "minLength": 1},
+          "title": {"type": "string"},
+          "source_url": {"type": "string"},
+          "source_path": {"type": "string"},
+          "change_type": {
+            "enum": ["new", "content_check", "content_changed", "file_changed_text_unchanged", "metadata_only", "content_unresolved", "renamed", "moved", "permission_changed", "restored", "suspected_missing", "source_orphan", "raw_excluded", "unchanged"]
+          },
+          "change_flags": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+          "requires_extraction": {"type": "boolean"},
+          "requires_semantic_refresh": {"type": "boolean"},
+          "requires_relation_review": {"type": "boolean"},
+          "responsible_action": {"type": "string"}
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extract_source_ids", "semantic_source_ids", "affected_source_ids", "processing_source_ids", "requires_relation_rebuild", "requires_render", "requires_health_audit"],
+      "properties": {
+        "extract_source_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "semantic_source_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "affected_source_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "processing_source_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "requires_relation_rebuild": {"type": "boolean"},
+        "requires_render": {"type": "boolean"},
+        "requires_health_audit": {"type": "boolean"}
+      }
+    }
+  }
+}

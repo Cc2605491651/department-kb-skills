@@ -1,0 +1,4 @@
+interface:
+  display_name: "部门知识库增量维护"
+  short_description: "持续发现知识库变化，执行局部蒸馏、健康检查、发布与回读"
+  default_prompt: "使用 $department-kb-maintain 从已验收的全量蒸馏目录创建独立增量任务，检查新增、修改、过期、孤立和冲突，只生成本地结果供我审核，未经我明确确认不要提交或发布。"
