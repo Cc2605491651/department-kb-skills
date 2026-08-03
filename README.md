@@ -54,3 +54,8 @@ python3 install.py --target "<个人Skill目录>" --mode copy --replace
 2. 首次蒸馏验收并上线后，再使用 `department-kb-maintain` 设置定期检查。
 
 每个Skill的具体执行要求以对应目录中的 `SKILL.md` 为准。
+
+## 详细文档
+
+- [使用说明](docs/使用说明.md)
+- [全局知识库读取提示词](docs/全局知识库读取提示词.md)
