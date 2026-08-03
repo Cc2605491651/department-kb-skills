@@ -743,7 +743,7 @@ sources, blindspots, relations, property_generated_at, property_updated_at
         failure_counts = Counter((row.get("failure_category", "未分类"), row.get("file_type", "未知")) for row in failures)
         failure_lines = [
             "# 解析失败原因汇总", "",
-            f"- 失败记录：{len(failures)}", 
+            f"- 失败记录：{len(failures)}",
             "- 说明：经Raw标准排除的格式不计入解析失败；详见Raw标准排除清单。", "",
             "| 失败类型 | 文件类型 | 数量 | 原因 | 建议处理 |", "|---|---|---:|---|---|",
         ]
