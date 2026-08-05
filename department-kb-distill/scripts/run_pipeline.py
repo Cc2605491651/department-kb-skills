@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -27,6 +28,10 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--model", default="")
+    parser.add_argument("--llm-provider", default="", help="codex|siliconflow|kimi，默认 codex（codex 订阅额度）")
+    parser.add_argument("--llm-model", default="", help="第三方实际模型名；为空用 provider 默认模型")
+    parser.add_argument("--llm-api-key-env", default="", help="第三方 API key 所在环境变量名（key 只经环境变量传入，不落盘）")
+    parser.add_argument("--no-ai-cache", action="store_true", help="跳过 AI 画像/核验缓存，每次真实调用（第三方默认强制开启）")
     parser.add_argument("--create-only", action="store_true")
     parser.add_argument("--target", default="")
     parser.add_argument("--root-name", default="")
@@ -51,6 +56,27 @@ def main() -> None:
     if args.limit:
         semantic.extend(["--limit", str(args.limit)])
         verify.extend(["--limit", str(args.limit)])
+    # LLM 提供方：命令行优先，否则读任务配置（配置缺失由 preflight 硬性拦截）
+    llm_provider = args.llm_provider or str(config.get("llm.provider", "provider", default="") or "")
+    if not llm_provider:
+        raise SystemExit("必须显式声明 LLM 提供方：配置 task-config.yaml 的 llm.provider 或传 --llm-provider")
+    if llm_provider != "codex" and args.stage in {"semantic", "verify", "all"}:
+        # 第三方：key 必须已注入环境变量；API key 绝不写入命令行、job 目录或台账
+        # 仅语义/核验阶段需要 key；preflight 等本地阶段不要求
+        if not args.llm_api_key_env:
+            raise SystemExit("第三方 LLM 提供方必须提供 --llm-api-key-env（API key 所在环境变量名）")
+        if not os.environ.get(args.llm_api_key_env, ""):
+            raise SystemExit(f"环境变量 {args.llm_api_key_env} 未设置；请先 export 该变量再执行")
+    if llm_provider != "codex":
+        llm_extra = ["--llm-provider", llm_provider]
+        if args.llm_model:
+            llm_extra.extend(["--llm-model", args.llm_model])
+        llm_extra.extend(["--llm-api-key-env", args.llm_api_key_env, "--no-ai-cache"])
+        semantic.extend(llm_extra)
+        verify.extend(llm_extra)
+    elif args.no_ai_cache:
+        semantic.append("--no-ai-cache")
+        verify.append("--no-ai-cache")
     if args.model:
         semantic.extend(["--model", args.model])
         verify.extend(["--model", args.model])

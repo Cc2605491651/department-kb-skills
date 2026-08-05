@@ -27,6 +27,47 @@ description: 面向所有部门的钉钉知识库首次全量蒸馏与全量重�
 
 不得跳过 `scripts/preflight.py`。编排器会在每个阶段自动运行门禁；缺少配置、规范、上游台账或发布目标不一致时必须停止。
 
+## 执行前选择 LLM 提供方（硬性门禁，不选择不执行）
+
+**任务配置 `task-config.yaml` 的 `llm.provider` 是必填字段**（codex / siliconflow / **deepseek=DeepSeek 官方 API** / kimi；注意 deepseek 指官方 api.deepseek.com，硅基流动上的 DeepSeek 模型用 siliconflow）。为空时 `preflight` 拒绝执行所有阶段——不存在静默默认。每轮新任务开始时必须先向用户确认一次，给出两个选项，确认结果写入任务配置或由 `--llm-provider` 显式传入：
+
+**启动信息收集（一次问齐）**：
+- **源知识库链接**（必给，空间链接或 ID）；
+- **所属部门**：默认展示知识库空间名作为建议值，用户确认即可（如"外教质量战役"）；
+- **任务执行人**：直接询问（审计需要）；**用普通文本默认+确认（默认当前账号名，用户可纠正），不要用选项框**——单选项 AskUserQuestion 会被系统拒绝；
+- **发布范围**：仅本地蒸馏，还是发布到钉钉（发布需目标文件夹链接）；
+- **LLM 选择**（必选，见上方选项 A/B）。
+
+**选项 A：消耗 codex 订阅额度**——在 `task-config.yaml` 配置 `llm.provider: codex`（或在命令显式传 `--llm-provider codex`），按本 Skill 其余流程直接执行。
+
+**选项 B：调用第三方大模型**（向用户说明收益时只说：**省 codex 订阅额度、省时间**，不使用"省钱"等表述）——执行以下步骤：
+
+1. **向用户发送钉钉 API 密钥文档链接**（权限已设置好，执行人可打开）：
+   `https://alidocs.dingtalk.com/i/nodes/b9Y4gmKWrPNpBnG0s4zMaRyAJGXn6lpz?utm_scene=person_space`
+   该文档内含各平台 API key（DeepSeek 官方 / 硅基流动 / Kimi）。
+2. 请用户打开文档，**找到对应平台的 API key，复制到 AI 对话框**（同时说明用的是哪个平台）。
+3. 等用户把密钥复制到 AI 对话框后，由 Agent 注入环境变量后执行。**Agent 自身不得把 key 写入任何文件**：
+   ```bash
+   export DEEPSEEK_API_KEY='<用户提供的key>'        # DeepSeek 官方
+   # 或 export SILICONFLOW_API_KEY='<用户提供的key>' # 硅基流动
+   # 或 export KIMI_API_KEY='<用户提供的key>'        # Kimi
+   ```
+4. 执行命令时传参（语义画像和关系核验自动透传）：
+   ```bash
+   python3 <SKILL_ROOT>/scripts/run_pipeline.py --job <JOB_DIR> --stage semantic \
+     --llm-provider deepseek --llm-api-key-env DEEPSEEK_API_KEY
+   # 硅基流动：--llm-provider siliconflow --llm-model deepseek-ai/DeepSeek-V4-Flash --llm-api-key-env SILICONFLOW_API_KEY
+   # Kimi：--llm-provider kimi --llm-api-key-env KIMI_API_KEY
+   ```
+5. 任务结束后 `unset DEEPSEEK_API_KEY SILICONFLOW_API_KEY KIMI_API_KEY`。
+
+**第三方模式的固定规则（不得违反）**：
+- API key 只存在于进程环境变量，绝不写入 job 目录、台账、报告、日志或任何文件。
+- 第三方模式强制 `--no-ai-cache`（每次真实调用），台账 `provider` 字段记录提供方、`model` 记录实际模型名，保证可追溯。
+- 第三方模式关系核验每批只发送 1 个候选（降低 json_object 输出缺项/改写 ID 的失败率）；prompt 已强制"每项必须输出，rejected 也要输出"。
+- 第三方调用失败：自动指数退避重试；批次失败记入 `05-ledgers/codex-task-log.jsonl`（`status=failed`）并继续，不中断整批。
+- 提供方注册表（base_url、默认模型、温度规则）在 `scripts/llm_providers.py`，新增提供方只改这一个文件。
+
 ## 新任务初始化
 
 从 Skill 目录外执行，使用绝对路径最稳妥：

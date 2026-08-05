@@ -1,6 +1,11 @@
 task_id: "<TASK_ID>"
 spec_version: "v1.0"
 
+llm:
+  # 必填：显式声明大模型提供方（codex / siliconflow / deepseek / kimi）
+  # 为空时 preflight 拒绝执行；不允许静默默认
+  provider: ""
+
 source:
   workspace_name: "<SOURCE_WORKSPACE_NAME>"
   workspace_id: "<SOURCE_WORKSPACE_ID>"

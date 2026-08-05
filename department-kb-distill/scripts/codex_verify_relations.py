@@ -6,6 +6,7 @@ import concurrent.futures
 import csv
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -13,6 +14,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import kb_common as common
+import llm_providers
 
 
 FIELDS = [
@@ -131,7 +133,8 @@ def prompt(tasks: list[dict]) -> str:
 5. source_evidence/target_evidence 写可定位的短证据；没有一端证据就返回空数组，并降低置信度。
 6. L1 仅限明确链接/稳定ID引用且不存在业务风险；普通上下游、实施、模板应用、普通依据为 L2；冲突、废止/替代效力、权限泄露风险，或关系会改变制度是否有效/谁优先/是否强制时必须标为 L3。
 7. 证据不足返回 rejected；存在冲突或无法确定方向返回 needs_review，禁止猜测。
-8. 输出是正式台账，不得出现“老大、老板、用户、您好”等对话称呼；不得复述密码、口令、Token、API Key 或私钥。
+8. 每项必须输出：即使判定 rejected 或 needs_review，也必须为每个 relation_id 输出一项，不得省略任何候选；relation_id 必须与输入完全一致，不得改写或截断。
+9. 输出是正式台账，不得出现“老大、老板、用户、您好”等对话称呼；不得复述密码、口令、Token、API Key 或私钥。
 
 输入 JSON：
 {json.dumps(payload, ensure_ascii=False)}
@@ -142,20 +145,22 @@ def cache_path(paths: dict[str, Path], relation_id: str) -> Path:
     return paths["semantic"] / "relation-verifications" / f"{relation_id}.json"
 
 
-def valid_cache(paths: dict[str, Path], task: dict, schema_hash: str) -> dict | None:
+def valid_cache(paths: dict[str, Path], task: dict, schema_hash: str, provider: str = "") -> dict | None:
     value = common.load_json(cache_path(paths, task["relation_id"]))
     if not isinstance(value, dict):
         return None
     meta = value.get("_meta") or {}
     if meta.get("input_hash") != task["input_hash"] or meta.get("schema_hash") != schema_hash or meta.get("prompt_version") != common.RELATION_PROMPT_VERSION:
         return None
+    if meta.get("provider", "") != provider:
+        return None
     return value
 
 
-def run_batch(tasks: list[dict], paths: dict[str, Path], schema_path: Path, schema_hash: str, model: str) -> dict[str, dict]:
+def run_batch(tasks: list[dict], paths: dict[str, Path], schema_path: Path, schema_hash: str, model: str, provider: str = "", api_key_env: str = "") -> dict[str, dict]:
     rendered = prompt(tasks)
     try:
-        payload, metadata = common.run_codex_structured(prompt=rendered, schema_path=schema_path, cwd=paths["job"], model=model)
+        payload, metadata = llm_providers.run_llm_structured(prompt=rendered, schema_path=schema_path, cwd=paths["job"], provider=provider, model=model, api_key_env=api_key_env)
         items = payload.get("items") or []
         by_id = {item.get("relation_id"): item for item in items if isinstance(item, dict)}
         if set(by_id) != {task["relation_id"] for task in tasks}:
@@ -171,6 +176,7 @@ def run_batch(tasks: list[dict], paths: dict[str, Path], schema_path: Path, sche
             item["_meta"] = {
                 **metadata, "input_hash": task["input_hash"], "schema_hash": schema_hash,
                 "prompt_version": common.RELATION_PROMPT_VERSION, "prompt_hash": common.sha256_text(rendered),
+                "provider": metadata.get("provider", provider),
                 "coverage_mode": task["coverage_mode"],
             }
             common.write_json(cache_path(paths, task["relation_id"]), item)
@@ -192,7 +198,10 @@ def run_batch(tasks: list[dict], paths: dict[str, Path], schema_path: Path, sche
         })
         if len(tasks) > 1:
             middle = len(tasks) // 2
-            return {**run_batch(tasks[:middle], paths, schema_path, schema_hash, model), **run_batch(tasks[middle:], paths, schema_path, schema_hash, model)}
+            return {
+                **run_batch(tasks[:middle], paths, schema_path, schema_hash, model, provider=provider, api_key_env=api_key_env),
+                **run_batch(tasks[middle:], paths, schema_path, schema_hash, model, provider=provider, api_key_env=api_key_env),
+            }
         raise
 
 
@@ -244,12 +253,26 @@ def to_row(candidate: dict, verification: dict) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Verify eligible relation candidates with Codex.")
+    parser = argparse.ArgumentParser(description="Verify eligible relation candidates with Codex or third-party LLM.")
     parser.add_argument("--job", type=Path, required=True)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--model", default="")
+    parser.add_argument("--llm-provider", default="", help="codex|siliconflow|kimi，默认 codex")
+    parser.add_argument("--llm-model", default="", help="第三方实际模型名；为空用 provider 默认模型")
+    parser.add_argument("--llm-api-key-env", default="", help="第三方 API key 所在环境变量名")
+    parser.add_argument("--no-ai-cache", action="store_true", help="跳过核验缓存，每次真实调用")
     args = parser.parse_args()
+    # resolve 返回第三项是 key 值，只做校验不沿用；后续一律用 args.llm_api_key_env（环境变量名）传递
+    llm_provider = args.llm_provider or str(common.load_task_config(args.job).get("llm.provider", "provider", default="") or "")
+    if not llm_provider:
+        raise RuntimeError("必须显式声明 LLM 提供方：配置 task-config.yaml 的 llm.provider 或传 --llm-provider")
+    provider, model, _ = llm_providers.resolve(llm_provider, args.llm_model or args.model, args.llm_api_key_env)
+    if not llm_providers.is_codex(provider) and not os.environ.get(args.llm_api_key_env or llm_providers.default_key_env(provider), ""):
+        raise RuntimeError(f"第三方 LLM 缺少 API key：请先设置环境变量 {args.llm_api_key_env or llm_providers.default_key_env(provider)}")
+    api_key_env = args.llm_api_key_env
+    # 第三方 json_object 输出不稳定（ID 改写/漏项），每批只放 1 个候选降低失败率；codex 保持 5 个
+    batch_max = 1 if not llm_providers.is_codex(provider) else 5
     paths = common.job_paths(args.job)
     candidate_path = paths["ledgers"] / "relation-candidates.csv"
     if not candidate_path.exists():
@@ -270,7 +293,7 @@ def main() -> None:
             results[candidate["relation_id"]] = {"verification_status": "confirmed", "_meta": {"model": "deterministic", "finished_at": common.now_iso()}}
             continue
         task = build_task(candidate, paths)
-        cached = valid_cache(paths, task, schema_hash)
+        cached = None if args.no_ai_cache else valid_cache(paths, task, schema_hash, provider=provider)
         if cached:
             results[candidate["relation_id"]] = cached
         else:
@@ -280,7 +303,7 @@ def main() -> None:
     chars = 0
     for task in tasks:
         size = len(task["source_text"]) + len(task["target_text"])
-        if current and (len(current) >= 5 or chars + size > 115_000):
+        if current and (len(current) >= batch_max or chars + size > 115_000):
             batches.append(current)
             current, chars = [], 0
         current.append(task)
@@ -288,9 +311,12 @@ def main() -> None:
     if current:
         batches.append(current)
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, args.workers)) as pool:
-        futures = [pool.submit(run_batch, batch, paths, schema_path, schema_hash, args.model) for batch in batches]
+        futures = [pool.submit(run_batch, batch, paths, schema_path, schema_hash, model, provider=provider, api_key_env=api_key_env) for batch in batches]
         for future in concurrent.futures.as_completed(futures):
-            results.update(future.result())
+            try:
+                results.update(future.result())
+            except RuntimeError as error:
+                print(f"RELATION_BATCH_FAILED {common.safe_error(error)}", flush=True)
             print(f"RELATION_VERIFY_PROGRESS completed={len(results)}/{len(eligible)}", flush=True)
     rows = [to_row(candidate, results[candidate["relation_id"]]) for candidate in eligible if candidate["relation_id"] in results]
     common.write_csv(paths["ledgers"] / "relation-verification.csv", rows, FIELDS)

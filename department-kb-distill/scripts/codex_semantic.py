@@ -6,6 +6,7 @@ import concurrent.futures
 import csv
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import sys
@@ -14,11 +15,12 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import kb_common as common
+import llm_providers
 
 
 DIRECT_CHARS = 55_000
 REQUEST_CHARS = 120_000
-MAX_ITEMS = 8
+MAX_ITEMS = 1
 SCHEMA_NAME = "semantic-output-v1.json"
 BUNDLED_SCHEMA = Path(__file__).resolve().parents[1] / "schemas" / SCHEMA_NAME
 LEDGER_FIELDS = [
@@ -147,12 +149,15 @@ def content_profile_path(paths: dict[str, Path], content_hash: str) -> Path:
     return paths["content_profiles"] / f"{content_hash}.json"
 
 
-def valid_profile(path: Path, content_hash: str, schema_hash: str) -> dict | None:
+def valid_profile(path: Path, content_hash: str, schema_hash: str, provider: str | None = "") -> dict | None:
+    """校验画像缓存。provider=None 表示不检查提供方（仅用于汇总已生成画像）；否则必须精确匹配。"""
     payload = common.load_json(path)
     if not isinstance(payload, dict):
         return None
     meta = payload.get("_meta") or {}
     if meta.get("input_hash") != content_hash or meta.get("prompt_version") != common.PROMPT_VERSION or meta.get("schema_hash") != schema_hash:
+        return None
+    if provider is not None and meta.get("provider", "") != provider:
         return None
     try:
         return validate_item(payload, content_hash)
@@ -166,7 +171,7 @@ def log_task(paths: dict[str, Path], record: dict) -> None:
 
 def run_batch(
     batch: list[dict], *, paths: dict[str, Path], schema_path: Path, schema_hash: str,
-    model: str, rollup: bool = False,
+    model: str, provider: str = "", api_key_env: str = "", rollup: bool = False,
 ) -> dict[str, dict]:
     task_kind = "semantic_rollup" if rollup else "semantic_extract"
     keys = [task["document_key"] for task in batch]
@@ -183,8 +188,9 @@ def run_batch(
         "input_chars": len(prompt),
     }
     try:
-        payload, metadata = common.run_codex_structured(
-            prompt=prompt, schema_path=schema_path, cwd=paths["job"], model=model,
+        payload, metadata = llm_providers.run_llm_structured(
+            prompt=prompt, schema_path=schema_path, cwd=paths["job"],
+            provider=provider, model=model, api_key_env=api_key_env,
         )
         items = payload.get("items") or []
         if len(items) != len(batch):
@@ -208,6 +214,7 @@ def run_batch(
                     "input_hash": task["document_key"], "prompt_version": common.PROMPT_VERSION,
                     "prompt_hash": base_log["prompt_hash"], "schema_hash": schema_hash,
                     "codex_cli_version": metadata["codex_cli_version"], "model": metadata["model"],
+                    "provider": metadata.get("provider", provider),
                     "generated_at": metadata["finished_at"], "content_mode": task.get("content_mode", "full_text"),
                     "input_chars": len(task["content"]), "chunks": 1, "attempts": metadata["attempts"],
                 }
@@ -219,24 +226,27 @@ def run_batch(
         if len(batch) > 1:
             middle = len(batch) // 2
             return {
-                **run_batch(batch[:middle], paths=paths, schema_path=schema_path, schema_hash=schema_hash, model=model, rollup=rollup),
-                **run_batch(batch[middle:], paths=paths, schema_path=schema_path, schema_hash=schema_hash, model=model, rollup=rollup),
+                **run_batch(batch[:middle], paths=paths, schema_path=schema_path, schema_hash=schema_hash, model=model, provider=provider, api_key_env=api_key_env, rollup=rollup),
+                **run_batch(batch[middle:], paths=paths, schema_path=schema_path, schema_hash=schema_hash, model=model, provider=provider, api_key_env=api_key_env, rollup=rollup),
             }
         raise
 
 
 def process_batches(
     batches: list[list[dict]], *, workers: int, paths: dict[str, Path], schema_path: Path,
-    schema_hash: str, model: str, rollup: bool = False,
+    schema_hash: str, model: str, provider: str = "", api_key_env: str = "", rollup: bool = False,
 ) -> dict[str, dict]:
     results: dict[str, dict] = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
         futures = [
-            pool.submit(run_batch, batch, paths=paths, schema_path=schema_path, schema_hash=schema_hash, model=model, rollup=rollup)
+            pool.submit(run_batch, batch, paths=paths, schema_path=schema_path, schema_hash=schema_hash, model=model, provider=provider, api_key_env=api_key_env, rollup=rollup)
             for batch in batches
         ]
         for future in concurrent.futures.as_completed(futures):
-            results.update(future.result())
+            try:
+                results.update(future.result())
+            except RuntimeError as error:
+                print(f"SEMANTIC_BATCH_FAILED {common.safe_error(error)}", flush=True)
             print(f"SEMANTIC_PROGRESS completed={len(results)}", flush=True)
     return results
 
@@ -253,7 +263,7 @@ def build_source_profiles(rows: list[dict], paths: dict[str, Path], schema_hash:
         if not content_hash:
             continue
         profile_path = content_profile_path(paths, content_hash)
-        profile = valid_profile(profile_path, content_hash, schema_hash)
+        profile = valid_profile(profile_path, content_hash, schema_hash, provider=None)
         if not profile:
             continue
         source_profile = {
@@ -313,13 +323,26 @@ def build_source_profiles(rows: list[dict], paths: dict[str, Path], schema_hash:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Use Codex to generate per-document semantic profiles.")
+    parser = argparse.ArgumentParser(description="Use Codex or third-party LLM to generate per-document semantic profiles.")
     parser.add_argument("--job", type=Path, required=True)
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--workers", type=int, default=4)
     parser.add_argument("--model", default="")
     parser.add_argument("--source-id", action="append", default=[])
+    parser.add_argument("--llm-provider", default="", help="codex|siliconflow|kimi，默认 codex")
+    parser.add_argument("--llm-model", default="", help="第三方实际模型名；为空用 provider 默认模型")
+    parser.add_argument("--llm-api-key-env", default="", help="第三方 API key 所在环境变量名")
+    parser.add_argument("--no-ai-cache", action="store_true", help="跳过 AI 画像缓存，每次真实调用")
     args = parser.parse_args()
+
+    # resolve 返回第三项是 key 值，只做校验不沿用；后续一律用 args.llm_api_key_env（环境变量名）传递
+    llm_provider = args.llm_provider or str(common.load_task_config(args.job).get("llm.provider", "provider", default="") or "")
+    if not llm_provider:
+        raise RuntimeError("必须显式声明 LLM 提供方：配置 task-config.yaml 的 llm.provider 或传 --llm-provider")
+    provider, model, _ = llm_providers.resolve(llm_provider, args.llm_model or args.model, args.llm_api_key_env)
+    if not llm_providers.is_codex(provider) and not os.environ.get(args.llm_api_key_env or llm_providers.default_key_env(provider), ""):
+        raise RuntimeError(f"第三方 LLM 缺少 API key：请先设置环境变量 {args.llm_api_key_env or llm_providers.default_key_env(provider)}")
+    api_key_env = args.llm_api_key_env
 
     paths = common.job_paths(args.job)
     for key in ("content_profiles", "source_profiles", "chunk_profiles", "schemas", "ledgers", "reports"):
@@ -353,7 +376,7 @@ def main() -> None:
     cached = 0
     for content_hash, row in items:
         path = content_profile_path(paths, content_hash)
-        if valid_profile(path, content_hash, schema_hash):
+        if not args.no_ai_cache and valid_profile(path, content_hash, schema_hash, provider=provider):
             cached += 1
             continue
         extracted = paths["extracted"] / f"{row['source_id']}.txt"
@@ -382,7 +405,8 @@ def main() -> None:
     if direct:
         generated.update(process_batches(
             pack_tasks(direct, REQUEST_CHARS, MAX_ITEMS), workers=args.workers, paths=paths,
-            schema_path=schema_path, schema_hash=schema_hash, model=args.model,
+            schema_path=schema_path, schema_hash=schema_hash, model=model,
+            provider=provider, api_key_env=api_key_env,
         ))
 
     for task, chunks in long_documents:
@@ -403,7 +427,8 @@ def main() -> None:
         if chunk_tasks:
             chunk_results = process_batches(
                 pack_tasks(chunk_tasks, REQUEST_CHARS, MAX_ITEMS), workers=args.workers, paths=paths,
-                schema_path=schema_path, schema_hash=schema_hash, model=args.model,
+                schema_path=schema_path, schema_hash=schema_hash, model=model,
+                provider=provider, api_key_env=api_key_env,
             )
             for chunk_task in chunk_tasks:
                 item = chunk_results[chunk_task["document_key"]]
@@ -424,7 +449,7 @@ def main() -> None:
         }
         generated.update(run_batch(
             [rollup_task], paths=paths, schema_path=schema_path, schema_hash=schema_hash,
-            model=args.model, rollup=True,
+            model=model, provider=provider, api_key_env=api_key_env, rollup=True,
         ))
 
     for content_hash, item in generated.items():
@@ -436,8 +461,9 @@ def main() -> None:
             "prompt_version": common.PROMPT_VERSION,
             "prompt_hash": common.sha256_text(semantic_prompt([{**row, "document_key": "<KEY>", "content_mode": "<MODE>", "content": "<CONTENT>"}])),
             "schema_hash": schema_hash,
-            "codex_cli_version": common.codex_version(),
-            "model": args.model or "default",
+            "codex_cli_version": llm_providers.backend_tag(provider),
+            "model": model or "default",
+            "provider": provider,
             "generated_at": common.now_iso(),
             "content_mode": "chunk_profiles_rollup" if len(chunks) > 1 else "full_text",
             "input_chars": len(content),

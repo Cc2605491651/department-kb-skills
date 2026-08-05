@@ -63,6 +63,16 @@ def main() -> None:
 
     errors.extend(validate_config_schema(config, SKILL_ROOT / "schemas" / "task-config.schema.json"))
 
+    # 硬性门禁：必须显式声明 LLM 提供方，不允许静默默认
+    llm_provider = str(config.get("llm.provider", "provider", default="") or "").strip()
+    if not llm_provider:
+        errors.append(
+            "必须显式声明 LLM 提供方：在 task-config.yaml 配置 llm.provider"
+            "（codex / siliconflow / deepseek=DeepSeek官方API / kimi），或运行时传 --llm-provider；不声明不执行"
+        )
+    elif llm_provider not in {"codex", "siliconflow", "deepseek", "kimi"}:
+        errors.append(f"llm.provider 不支持的值：{llm_provider}（支持 codex / siliconflow / deepseek=DeepSeek官方API / kimi）")
+
     required_values = {
         "source.workspace_id": config.get("source.workspace_id", "workspace_id"),
         "source.workspace_url": config.get("source.workspace_url", "workspace_url"),

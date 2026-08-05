@@ -171,9 +171,11 @@ def main() -> None:
         or row.get("target_creator_name", "") not in l3_text
     ]
     required_l3_labels = ["文档", "创建者", "原文链接", "存在什么关系", "这段关系是什么意思", "负责人需要确认什么"]
-    missing_l3_labels = [label for label in required_l3_labels if label not in l3_text]
+    # 无 L3 关系时（relations=0）清单为空模板，不要求业务标签齐全；有 L3 关系才逐项校验
+    l3_labels_required = len(queue) > 0
+    missing_l3_labels = [label for label in required_l3_labels if label not in l3_text] if l3_labels_required else []
     prohibited_l3_labels = ["关系 ID", "系统关系标签", "为什么列为 L3", "触发规则", "双方原文证据"]
-    leaked_technical_labels = [label for label in prohibited_l3_labels if label in l3_text]
+    leaked_technical_labels = [label for label in prohibited_l3_labels if label in l3_text] if l3_labels_required else []
     checks.append(("L3 业务清单精简且信息完整", l3_page.exists() and not incomplete_l3_explanations and not missing_l3_labels and not leaked_technical_labels, f"relations={len(queue)} incomplete={len(incomplete_l3_explanations)} missing_labels={len(missing_l3_labels)} technical_labels={len(leaked_technical_labels)}"))
     metadata_csv = preview / "05-元数据（17字段）" / "17字段元数据总表.csv"
     batch_acceptance = common.load_json(paths["ledgers"] / "distillation-acceptance.json", {})
@@ -308,6 +310,9 @@ def main() -> None:
     checks.append(("名词解释与规则对照表", glossary.exists() and not missing_terms, f"missing_terms={len(missing_terms)}"))
     incomplete_relation_details: list[str] = []
     for relation in verification:
+        # 被驳回的关系（证据不足）按规范不进"相关知识"展示，不要求页面出现与解释完整
+        if relation.get("verification_status") == "rejected":
+            continue
         relation_id = relation.get("relation_id", "")
         has_evidence = bool(relation.get("source_evidence") or relation.get("target_evidence") or relation.get("codex_evidence") or relation.get("local_evidence"))
         source_id = relation.get("source_id", "")

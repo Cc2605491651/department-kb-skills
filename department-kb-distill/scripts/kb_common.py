@@ -18,7 +18,7 @@ from config_utils import load_config
 
 
 PROMPT_VERSION = "department-kb-semantic-v2"
-RELATION_PROMPT_VERSION = "department-kb-relation-v3"
+RELATION_PROMPT_VERSION = "department-kb-relation-v4"
 SUCCESS_STATUSES = {"全文已解析"}
 LOG_LOCK = threading.Lock()
 SENSITIVE_URL_KEYS = {

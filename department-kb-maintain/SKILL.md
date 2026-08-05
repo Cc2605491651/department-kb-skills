@@ -27,6 +27,10 @@ description: 维护已经完成首次全量蒸馏的部门钉钉知识库。发�
 - 发布必须单独执行`--stage publish`；发布失败或回读失败时不得更新成功基线。
 - 不自动删除、归档、判定失效、移动线上节点或修改线上权限。
 
+## LLM 提供方选择
+
+维护过程中涉及大模型的阶段（新增文档的语义画像、关系核验）与 `department-kb-distill` 共用同一选择：执行前询问用户用 codex 订阅额度还是第三方大模型。第三方时按 distill 的规则注入环境变量，并用 distill 的 `run_pipeline.py` 传参执行（`--llm-provider` / `--llm-model` / `--llm-api-key-env` / `--no-ai-cache`），API key 只经环境变量传入，不写文件、不进台账。
+
 ## 标准执行
 
 ### 1. 首次创建独立增量任务

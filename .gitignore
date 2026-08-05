@@ -20,3 +20,8 @@ htmlcov/
 
 # 仅用于钉钉文件夹分发，不上传GitHub
 /钉钉分发版-*.md
+
+# 本地打包与分发压缩包，不上传GitHub
+/蒸馏skill压缩包/
+/蒸馏skill压缩包.zip
+/docs/
